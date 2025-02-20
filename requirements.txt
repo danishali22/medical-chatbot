@@ -1,6 +1,8 @@
 langchain
 langchain_community
 langchain_huggingface
-faiss-cpu
+# faiss-cpu
+qdrant-client
+langchain-qdrant
 pypdf
 streamlit

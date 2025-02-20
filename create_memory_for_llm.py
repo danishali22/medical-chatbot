@@ -1,7 +1,10 @@
+import os
 from langchain_community.document_loaders import PyPDFLoader, DirectoryLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS
+from langchain_qdrant import Qdrant
+from qdrant_client import QdrantClient
+from qdrant_client.http.models import VectorParams, Distance
 from dotenv import load_dotenv, find_dotenv
 
 load_dotenv(find_dotenv())
@@ -33,7 +36,36 @@ def get_embedding_model():
 
 embedding_model = get_embedding_model()
 
-# Step 4 embeddings in FIAS
-DB_FAISS_PATH = "vectorstore/db_faiss"
-db = FAISS.from_documents(text_chunks, embedding_model)
-db.save_local(DB_FAISS_PATH)
+# Step 4: Store embeddings in Qdrant without deepcopy issues
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
+QDRANT_ENDPOINT_URL = os.getenv("QDRANT_ENDPOINT_URL")
+
+qdrant_client = QdrantClient(
+    url=QDRANT_ENDPOINT_URL,
+    api_key=QDRANT_API_KEY
+)
+
+# Choose a collection name for your data
+COLLECTION_NAME = "medibot"
+
+# Ensure the collection exists
+embedding_dimension = 384
+existing_collections = qdrant_client.get_collections().collections
+collection_names = [col.name for col in existing_collections]
+if COLLECTION_NAME not in collection_names:
+    qdrant_client.create_collection(
+        collection_name=COLLECTION_NAME,
+        vectors_config=VectorParams(size=embedding_dimension, distance=Distance.COSINE)
+    )
+
+# create an instance of Qdrant and then add the documents.
+db = Qdrant(
+    client=qdrant_client,
+    collection_name=COLLECTION_NAME,
+    embeddings=embedding_model
+)
+
+# Append documents (chunks) to the collection
+db.add_documents(text_chunks)
+
+print(f"Uploaded {len(text_chunks)} chunks to Qdrant collection '{COLLECTION_NAME}'.")
